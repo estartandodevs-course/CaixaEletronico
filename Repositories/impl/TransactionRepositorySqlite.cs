@@ -6,6 +6,7 @@ using System.Linq;
 using System.Security.Principal;
 using System.Text;
 using System.Threading.Tasks;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace CaixaEletronico.Repositories.impl
 {
@@ -220,11 +221,16 @@ namespace CaixaEletronico.Repositories.impl
 
         public List<Transaction> GetAll(Account account)
         {
+            if (account.Number == null)
+            {
+                throw new Exception("A conta deve possui um número");
+            }
+
             using var connection = new SQLiteConnection(ConnectionSource);
             connection.Open();
 
             using var command = new SQLiteCommand(connection);
-            command.CommandText = @"SELECT id, type, amount, source_account_fk, destination_account_fk 
+            command.CommandText = @"SELECT id, type, amount, source_account_fk, destination_account_fk, date_time
                                     FROM transactions WHERE source_account_fk = @source_account_fk OR destination_account_fk = @destination_account_fk ";
             command.Parameters.AddWithValue("@source_account_fk", account.Number);
             command.Parameters.AddWithValue("@destination_account_fk", account.Number);
@@ -233,15 +239,21 @@ namespace CaixaEletronico.Repositories.impl
 
             List<Transaction> result = new List<Transaction>();
 
-            var accountsMap = new Dictionary<int, Account>();
+            var accountsMap = new Dictionary<long, Account>
+            {
+                [(long)account.Number] = account
+            };
+
+
 
             while (reader.Read())
             {
-                int id = reader.GetInt32(0);
+                long id = reader.GetInt64(0);
                 string typeStr = reader.GetString(1);
                 decimal amount = reader.GetDecimal(2);
-                int sourceAccountId = reader.GetInt32(3);
-                int? destinationAccountId = reader.GetInt32(3);
+                long sourceAccountId = reader.GetInt64(3);
+                long? destinationAccountId = reader.IsDBNull(4) ? null : reader.GetInt64(4);
+                DateTime dateTime = reader.GetDateTime(5);
 
                 // inicializa o tipo da transação como Other
                 TransactionType type = TransactionType.Other;
@@ -252,13 +264,18 @@ namespace CaixaEletronico.Repositories.impl
                 if (!accountsMap.TryGetValue(sourceAccountId, out Account? sourceAccount))
                     sourceAccount = AccountRepository.Get(sourceAccountId);
 
+                if (sourceAccount == null)
+                {
+                    throw new Exception("Não foi possivél carregar a instancia da conta de origem da transação");
+                }
+
                 // tenta buscar a instancia de conta que já esta salva no dicionario, se não achar, busca no banco.
                 Account? destinationAccount = null;
                 if (destinationAccountId != null && !accountsMap.TryGetValue((int)destinationAccountId, out destinationAccount))
-                    destinationAccount = AccountRepository.Get((int)destinationAccountId);
+                    destinationAccount = AccountRepository.Get((long)destinationAccountId);
 
                 result.Add(
-                    new Transaction(type, amount, sourceAccount, destinationAccount, id)
+                    new Transaction(type, amount, sourceAccount, destinationAccount, id, dateTime)
                 );
             }
 

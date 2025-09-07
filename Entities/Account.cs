@@ -1,6 +1,4 @@
 ﻿using CaixaEletronico.Repositories;
-using System.Transactions;
-
 namespace CaixaEletronico.Entities
 {
     internal class Account
@@ -8,7 +6,7 @@ namespace CaixaEletronico.Entities
         public long? Number { get; }
         public string HolderName { get; }
         public decimal Balance { get; private set; }
-        private readonly List<Transaction> _transactions = [];
+        private List<Transaction> _transactions = [];
 
         public Account(string holderName) 
         { 
@@ -22,6 +20,16 @@ namespace CaixaEletronico.Entities
             HolderName = holderName;
             Balance = balance;
             _transactions = transactions;
+        }
+
+        public void LoadTransactions(List<Transaction> transactions)
+        {
+            _transactions = transactions;
+        }
+
+        public List<Transaction> GetTransactions()
+        {
+            return _transactions.ToList();
         }
 
         public Transaction Withdraw(decimal amount) 
@@ -65,6 +73,15 @@ namespace CaixaEletronico.Entities
         {
             _transactions.Add(transaction);
             Balance += transaction.Amount;
+        }
+
+        public override bool Equals(object? obj)
+        {
+            if (obj is Account other)
+            {
+                return this.Number == other.Number;
+            }
+            return false;
         }
     }
 }

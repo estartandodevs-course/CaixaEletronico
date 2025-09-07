@@ -110,7 +110,23 @@ class Program
 
     public static void ShowLoggedMenu()
     {
-        CreateTransactionUI();
+        List<String> menuOptions = ["Fazer transação", "Visualizar histórico de transações", "Sair"];
+
+        var selectedOption = ShowMenu(menuOptions);
+
+        switch (selectedOption)
+        {
+
+            case 0:
+                CreateTransactionUI();
+                break;
+            case 1:
+                ShowTransactionsHistory();
+                break;
+            case 2:
+                _selectedAccount = null;
+                break;
+        }
     }
 
     public static void ShowLoggedOutMenu()
@@ -125,6 +141,9 @@ class Program
         else
         {
             _selectedAccount = GetAccountUI();
+            {
+
+            }
         }
     }
 
@@ -155,9 +174,8 @@ class Program
 
                 account = SaveAccount(account);
 
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("Conta criada com sucesso. número da conta = " + account.Number);
-                Console.ResetColor();
+                _selectedAccount = account;
+                _sucessMessage = "Conta criada com sucesso.";
 
                 break;
             }
@@ -184,39 +202,26 @@ class Program
             throw new InvalidOperationException("Só é possivél fazer essa operação, estando logado em uma conta");
         }
 
-        List<string> menuOptions = Enum.GetNames(typeof(TransactionType)).ToList();
-
-        Console.WriteLine("Informe o tipo de transação");
+        List<string> menuOptions = ["Transferir", "Sacar", "Depositar"];
 
         var selectedOption = ShowMenu(menuOptions);
 
-        bool isValidOption = Enum.TryParse<TransactionType>(menuOptions[selectedOption], out var selectedType);
-
-        if (!isValidOption)
+        switch (selectedOption)
         {
-            _errorMessage = "O tipo de transação selecionado não é suportado";
-            return;
-        }
 
-        if (selectedType == TransactionType.Transfer)
-        {
-            MakeTransferUI();
-            return;
+            case 0:
+                MakeTransferUI();
+                break;
+            case 1:
+                MakeWithdrawUI();
+                break;
+            case 2:
+                MakeDepositUI();
+                break;
+            default:
+                _errorMessage = $"Transações do tipo {selectedOption + 1} ainda não são suportadas";
+                break;
         }
-
-        if (selectedType == TransactionType.Withdraw)
-        {
-            MakeWithdrawUI();
-            return;
-        }
-
-        if (selectedType == TransactionType.Deposit)
-        {
-            MakeDepositUI();
-            return;
-        }
-
-        _errorMessage = $"Transações do tipo {selectedType} ainda não são suportadas";
     }
 
     public static void MakeTransferUI()
@@ -242,7 +247,7 @@ class Program
             var transaction = _selectedAccount.Transfer(amount, destinationAccount);
             SaveTransaction(transaction);
             _errorMessage = null;
-            _sucessMessage = $"Transferência de {transaction.Amount} para {destinationAccount.HolderName} em {transaction.DateTime}";
+            _sucessMessage = $"Transferência de {transaction.Amount:C} para {destinationAccount.HolderName} em {transaction.DateTime}";
         } 
         catch (Exception ex)
         {
@@ -267,7 +272,7 @@ class Program
             var transaction = _selectedAccount.Deposit(amount);
             SaveTransaction(transaction);
             _errorMessage = null;
-            _sucessMessage = $"Depósito de {transaction.Amount} feito em {transaction.DateTime}";
+            _sucessMessage = $"Depósito de {transaction.Amount:C} feito em {transaction.DateTime}";
         }
         catch (Exception ex)
         {
@@ -283,7 +288,7 @@ class Program
             throw new InvalidOperationException("Só é possivél fazer essa operação, estando logado em uma conta");
         }
 
-        Console.Write($"Informe o valor a ser depositado: ");
+        Console.Write($"Informe o valor a ser sacado: ");
 
         decimal amount = Convert.ToDecimal(Console.ReadLine());
 
@@ -292,7 +297,7 @@ class Program
             var transaction = _selectedAccount.Withdraw(amount);
             SaveTransaction(transaction);
             _errorMessage = null;
-            _sucessMessage = $"Saque de {transaction.Amount} feito em {transaction.DateTime}";
+            _sucessMessage = $"Saque de {transaction.Amount:C} feito em {transaction.DateTime}";
         }
         catch (Exception ex)
         {
@@ -301,6 +306,64 @@ class Program
         }
     }
 
+    public static void ShowTransactionsHistory()
+    {
+        if (_selectedAccount == null)
+        {
+            throw new InvalidOperationException("Só é possivél fazer essa operação, estando logado em uma conta");
+        }
+
+        Console.Clear();
+        _errorMessage = null;
+        _sucessMessage = null;
+
+        ShowAccountInfoUI();
+
+        // insere as transações da conta encontrada
+        var transactions = _transactionRepository.GetAll(_selectedAccount);
+
+        Console.ForegroundColor = ConsoleColor.Blue;
+        Console.WriteLine($"Transações ({transactions.Count}): \n");
+        Console.ResetColor();
+
+
+        foreach (var transaction in transactions)
+        {
+            if (transaction.Type == TransactionType.Transfer)
+            {
+                if (transaction.IsDestination(_selectedAccount)) {
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine($"Trasferência recebida de {transaction.SourceAccount.HolderName} no valor de {transaction.Amount:C} em {transaction.DateTime}");
+                } else
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"Trasferência enviada para {transaction.DestinationAccountHolderName} no valor de {transaction.Amount:C} em {transaction.DateTime}");
+                }
+            }
+
+            if (transaction.Type == TransactionType.Deposit)
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"Depósito efetuado no valor de {transaction.Amount:C} em {transaction.DateTime}");
+            }
+                
+
+            if (transaction.Type == TransactionType.Withdraw)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Saque efetuado no valor de {transaction.Amount:C} em {transaction.DateTime}");
+            } 
+
+            Console.ResetColor();
+        }
+
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine("\nPressione qualquer tecla para voltar...");
+        Console.ReadKey(true);
+
+        Console.ResetColor();
+
+    }
     public static Account? GetAccountUI()
     {
         while (true)
@@ -317,7 +380,6 @@ class Program
                 long number = long.Parse(numberStr); ;
 
                 Account? foundedAccount = _accountRepository.Get(number);
-
 
                 if (foundedAccount != null)
                 {
@@ -372,8 +434,11 @@ class Program
         Console.ResetColor();
 
         Console.ForegroundColor = ConsoleColor.DarkGray;
-        Console.WriteLine("Mensagens: \n");
-        Console.ResetColor();
+
+
+        if (_errorMessage != null || _sucessMessage != null)
+            Console.WriteLine("Mensagens: \n");
+
 
         if (_errorMessage != null)
         {
